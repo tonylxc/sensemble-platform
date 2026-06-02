@@ -15,7 +15,7 @@ os.environ.setdefault("DB_NAME", "sensemble_test")
 
 import pytest
 
-TABLES = "users, devices, sensor_data, datasets, reviews, audit_logs, api_keys, notifications"
+TABLES = "users, devices, sensor_data, datasets, reviews, audit_logs, api_keys, notifications, dataset_versions"
 
 
 @pytest.fixture(scope="session")

@@ -66,10 +66,24 @@ CREATE TABLE IF NOT EXISTS datasets (
     status         VARCHAR(16) NOT NULL DEFAULT 'draft',    -- draft/pending/published/rejected
     tags           TEXT[],
     download_count INT NOT NULL DEFAULT 0,
+    archive_path   VARCHAR(256),
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_datasets_status ON datasets(status);
 CREATE INDEX IF NOT EXISTS idx_datasets_vis ON datasets(visibility);
+
+-- ===== 数据集元数据版本历史 =====
+CREATE TABLE IF NOT EXISTS dataset_versions (
+    id          BIGSERIAL PRIMARY KEY,
+    dataset_id  VARCHAR(32) NOT NULL REFERENCES datasets(dataset_id),
+    version     INT NOT NULL,
+    name        VARCHAR(128),
+    description TEXT,
+    meta        JSONB,
+    editor_id   BIGINT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_dsver_dataset ON dataset_versions(dataset_id);
 
 -- ===== 审核 =====
 CREATE TABLE IF NOT EXISTS reviews (

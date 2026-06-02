@@ -73,3 +73,10 @@ class DatasetIn(BaseModel):
 class ReviewIn(BaseModel):
     result: str  # approved / rejected
     comment: Optional[str] = None
+
+
+class DatasetUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    meta: Optional[dict] = None
+    tags: Optional[list[str]] = None

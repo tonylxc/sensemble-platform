@@ -5,16 +5,17 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse, JSONResponse
-from sqlalchemy import select, text, and_, or_
+from sqlalchemy import select, text, and_, or_, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_current_user, require_roles
-from ..schemas import DatasetIn, ReviewIn
+from ..schemas import DatasetIn, ReviewIn, DatasetUpdate
 from ..audit import log
 from ..dqs import compute_full
 from ..pii import scan_text
 from ..notify import notify
+from ..storage import archive_csv
 from .. import models
 
 router = APIRouter()
@@ -49,17 +50,67 @@ def create_dataset(body: DatasetIn, db: Session = Depends(get_db),
     score, grade, detail = compute_full(len(rows), expected, body.meta, values, timestamps, interval)
 
     did = _new_id(db)
+    # 原始数据归档到 MinIO（FR-4.3，尽力而为；不可用时 archive_path 为 None）
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["ts", "device_id", "metric", "value", "lat", "lon"])
+    for r in rows:
+        w.writerow([r.ts.isoformat(), r.device_id, r.metric, r.value, r.lat, r.lon])
+    archive_path = archive_csv(f"datasets/{did}.csv", buf.getvalue().encode("utf-8"))
     ds = models.Dataset(
         dataset_id=did, name=body.name, creator_id=user.id, description=body.description,
         meta={**body.meta, "dqs_detail": detail}, device_id=body.device_id,
         ts_start=body.start, ts_end=body.end, dqs=score, grade=grade,
         visibility=body.visibility if body.visibility in ("public", "private") else "private",
-        status="draft", tags=body.tags)
+        status="draft", tags=body.tags, archive_path=archive_path)
     db.add(ds)
     db.commit()
     log(db, user.id, "dataset_create", did, {"dqs": score})
     return {"dataset_id": did, "dqs": score, "grade": grade, "status": "draft",
             "points": len(rows), "citation": _citation(user.username, body.name, did)}
+
+
+@router.patch("/{dataset_id}")
+def update_dataset(dataset_id: str, body: DatasetUpdate, db: Session = Depends(get_db),
+                   user: models.User = Depends(get_current_user)):
+    """更新元数据并记录版本历史（FR-5.3）。仅作者、仅 draft/rejected 可改。"""
+    ds = db.get(models.Dataset, dataset_id)
+    if not ds or ds.creator_id != user.id:
+        raise HTTPException(404, "数据集不存在或非本人")
+    if ds.status not in ("draft", "rejected"):
+        raise HTTPException(400, f"当前状态 {ds.status} 不可编辑")
+    new_name = body.name if body.name is not None else ds.name
+    new_desc = body.description if body.description is not None else ds.description
+    new_meta = body.meta if body.meta is not None else ds.meta
+    hits = scan_text(new_name, new_desc or "", str(new_meta))
+    if hits:
+        raise HTTPException(400, "检测到疑似敏感/隐私信息：" + "、".join(hits))
+    # 快照当前内容为一个历史版本
+    last = db.scalar(select(func.max(models.DatasetVersion.version))
+                     .where(models.DatasetVersion.dataset_id == dataset_id)) or 0
+    db.add(models.DatasetVersion(dataset_id=dataset_id, version=last + 1, name=ds.name,
+                                 description=ds.description, meta=ds.meta, editor_id=user.id))
+    ds.name = new_name
+    ds.description = new_desc
+    if body.meta is not None:
+        ds.meta = new_meta
+    if body.tags is not None:
+        ds.tags = body.tags
+    db.commit()
+    log(db, user.id, "dataset_update", dataset_id)
+    return {"dataset_id": dataset_id, "saved_version": last + 1}
+
+
+@router.get("/{dataset_id}/versions")
+def dataset_versions(dataset_id: str, db: Session = Depends(get_db),
+                     user: models.User = Depends(get_current_user)):
+    ds = db.get(models.Dataset, dataset_id)
+    if not ds or (ds.creator_id != user.id and user.role not in ("teacher", "admin")):
+        raise HTTPException(404, "数据集不存在或无权查看")
+    rows = db.execute(select(models.DatasetVersion).where(models.DatasetVersion.dataset_id == dataset_id)
+                      .order_by(models.DatasetVersion.version.desc())).scalars().all()
+    return [{"version": v.version, "name": v.name, "description": v.description, "meta": v.meta,
+             "created_at": v.created_at.isoformat() if v.created_at else None} for v in rows]
 
 
 @router.post("/{dataset_id}/submit")

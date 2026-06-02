@@ -64,6 +64,7 @@ class Dataset(Base):
     status: Mapped[str] = mapped_column(String(16), default="draft")
     tags: Mapped[list | None] = mapped_column(ARRAY(Text), nullable=True)
     download_count: Mapped[int] = mapped_column(Integer, default=0)
+    archive_path: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -105,4 +106,16 @@ class Notification(Base):
     message: Mapped[str] = mapped_column(Text)
     link: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DatasetVersion(Base):
+    __tablename__ = "dataset_versions"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    dataset_id: Mapped[str] = mapped_column(String(32), ForeignKey("datasets.dataset_id"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    meta: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    editor_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

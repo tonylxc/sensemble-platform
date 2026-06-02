@@ -10,7 +10,7 @@ from .security import hash_password
 from .mqtt_ingest import start_mqtt
 from .monitor import start_offline_monitor
 from . import models
-from .routers import auth, devices, data, datasets, internal, keys, open_data, notifications, stats
+from .routers import auth, devices, data, datasets, internal, keys, open_data, notifications, stats, meta
 
 
 def ensure_admin():
@@ -33,6 +33,7 @@ def migrate():
     from sqlalchemy import text
     stmts = [
         "ALTER TABLE devices ADD COLUMN IF NOT EXISTS offline_alerted BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE datasets ADD COLUMN IF NOT EXISTS archive_path VARCHAR(256)",
     ]
     with engine.begin() as conn:
         for s in stmts:
@@ -77,6 +78,7 @@ app.include_router(keys.router, prefix="/api/v1/keys", tags=["api-keys"])
 app.include_router(open_data.router, prefix="/api/v1/open", tags=["open-api"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
 app.include_router(stats.router, prefix="/api/v1/stats", tags=["stats"])
+app.include_router(meta.router, prefix="/api/v1/meta", tags=["meta"])
 
 # Prometheus 指标（FR-15.2）：暴露 /metrics 供 Prometheus 抓取（依赖缺失时静默跳过）
 try:

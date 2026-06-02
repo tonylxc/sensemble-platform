@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     rate_limit_min_interval: float = 0.0      # 每设备最小上报间隔(秒)，0=不限流
     offline_monitor_enabled: bool = True
     offline_check_interval: int = 60          # 离线巡检周期(秒)
+    # MinIO 对象存储（原始件归档，尽力而为）
+    minio_endpoint: str = "minio:9000"
+    minio_user: str = "minioadmin"
+    minio_password: str = "minioadmin"
+    minio_bucket: str = "sensemble"
+    minio_enabled: bool = True
+    minio_secure: bool = False
 
     @property
     def database_url(self) -> str:

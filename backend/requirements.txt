@@ -11,3 +11,4 @@ numpy==2.*
 python-multipart==0.0.*
 prometheus-fastapi-instrumentator==7.*
 bcrypt==4.0.1  # 钉版：passlib 1.7.4 与 bcrypt>=4.1 不兼容
+minio==7.*
