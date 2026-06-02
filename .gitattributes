@@ -1,0 +1,4 @@
+# 统一行尾为 LF，保证 deploy.sh / *.conf / *.sql 在 Linux 服务器上正确执行
+* text=auto eol=lf
+*.png -text
+*.ico -text
