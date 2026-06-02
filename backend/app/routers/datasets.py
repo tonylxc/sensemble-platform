@@ -162,6 +162,7 @@ def search(keyword: Optional[str] = None, sort: str = "time",
     rows = db.execute(q.order_by(order).limit(200)).scalars().all()
     return [{"dataset_id": d.dataset_id, "name": d.name, "dqs": d.dqs, "grade": d.grade,
              "status": d.status, "visibility": d.visibility, "downloads": d.download_count,
+             "archived": d.archive_path is not None,
              "created_at": d.created_at.isoformat() if d.created_at else None} for d in rows]
 
 
@@ -202,3 +203,26 @@ def download(dataset_id: str, format: str = Query("csv", pattern="^(csv|json)$")
     buf.seek(0)
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
                              headers={"Content-Disposition": f"attachment; filename={dataset_id}.csv"})
+
+
+# 注意：本路由必须放在 /pending、/{id}/versions、/{id}/download 之后，
+# 否则裸 /{dataset_id} 会抢占这些更具体的路径。
+@router.get("/{dataset_id}")
+def detail(dataset_id: str, db: Session = Depends(get_db),
+           user: models.User = Depends(get_current_user)):
+    """单个数据集完整详情（FR-11.1）：公开集，或本人/教师可见。供前端编辑预填与详情面板。"""
+    ds = db.get(models.Dataset, dataset_id)
+    if not ds:
+        raise HTTPException(404, "数据集不存在")
+    if ds.status != "published" and ds.creator_id != user.id and user.role not in ("teacher", "admin"):
+        raise HTTPException(403, "无权查看该数据集")
+    return {
+        "dataset_id": ds.dataset_id, "name": ds.name, "description": ds.description,
+        "meta": ds.meta, "tags": ds.tags or [], "device_id": ds.device_id,
+        "ts_start": ds.ts_start.isoformat() if ds.ts_start else None,
+        "ts_end": ds.ts_end.isoformat() if ds.ts_end else None,
+        "dqs": ds.dqs, "grade": ds.grade, "visibility": ds.visibility, "status": ds.status,
+        "downloads": ds.download_count, "archived": ds.archive_path is not None,
+        "creator_id": ds.creator_id,
+        "created_at": ds.created_at.isoformat() if ds.created_at else None,
+    }

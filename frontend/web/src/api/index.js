@@ -30,8 +30,11 @@ export const dataApi = {
 
 export const datasetApi = {
   list: (params) => client.get('/api/v1/datasets', { params }),
+  detail: (id) => client.get(`/api/v1/datasets/${id}`),
   pending: () => client.get('/api/v1/datasets/pending'),
   create: (data) => client.post('/api/v1/datasets', data),
+  update: (id, data) => client.patch(`/api/v1/datasets/${id}`, data),
+  versions: (id) => client.get(`/api/v1/datasets/${id}/versions`),
   submit: (id) => client.post(`/api/v1/datasets/${id}/submit`),
   review: (id, data) => client.post(`/api/v1/datasets/${id}/review`, data),
   download: (id, format = 'csv') =>
@@ -46,4 +49,16 @@ export const notificationApi = {
 
 export const statsApi = {
   overview: () => client.get('/api/v1/stats/overview')
+}
+
+// API Key 管理（注意：后端 create 的 name 是 query 参数，非 body）
+export const keyApi = {
+  list: () => client.get('/api/v1/keys'),
+  create: (name) => client.post('/api/v1/keys', null, { params: { name } }),
+  revoke: (id) => client.delete(`/api/v1/keys/${id}`)
+}
+
+// 元数据辅助：传感器型号词典（供下拉与自动填精度）
+export const metaApi = {
+  sensorTypes: () => client.get('/api/v1/meta/sensor-types')
 }

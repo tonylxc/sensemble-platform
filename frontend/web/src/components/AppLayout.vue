@@ -52,8 +52,10 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
         <RouterLink to="/devices" active-class="active"><span class="ic">📟</span>我的设备</RouterLink>
         <RouterLink to="/visualize" active-class="active"><span class="ic">📈</span>数据可视化</RouterLink>
         <RouterLink to="/datasets" active-class="active"><span class="ic">🗂️</span>数据集广场</RouterLink>
+        <RouterLink to="/keys" active-class="active"><span class="ic">🔑</span>API 密钥</RouterLink>
         <RouterLink v-if="isTeacher" to="/review" active-class="active"><span class="ic">✅</span>审核队列</RouterLink>
         <RouterLink v-if="isTeacher" to="/stats" active-class="active"><span class="ic">📊</span>统计看板</RouterLink>
+        <a v-if="isTeacher" href="/dashboard" target="_blank" class="bigscreen"><span class="ic">🖥️</span>实验室大屏 ↗</a>
       </nav>
       <div class="foot">众感汇流，数据共鸣<br>v1.0-MVP</div>
     </aside>
@@ -85,6 +87,8 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 </template>
 
 <style scoped>
+.bigscreen { color: #5EEAD4; margin-top: 6px; border: 1px dashed rgba(94,234,212,.35); }
+.bigscreen:hover { color: #fff; border-color: #5EEAD4; }
 .bell { position: relative; cursor: pointer; font-size: 18px; padding: 4px 6px; user-select: none; }
 .badge-dot { position: absolute; top: -2px; right: -4px; background: #DB2777; color: #fff; font-size: 10px;
   min-width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 999px; padding: 0 4px; font-weight: 700; }
