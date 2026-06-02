@@ -1,0 +1,81 @@
+# 众感 Sensemble — MVP 单机编排（K8s 留 P2）
+# 启动：cp .env.example .env && docker compose up -d --build
+services:
+  db:
+    image: timescale/timescaledb-ha:pg16        # 含 TimescaleDB + PostGIS
+    environment:
+      POSTGRES_USER: ${DB_USER:-sensemble}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sensemble}
+      POSTGRES_DB: ${DB_NAME:-sensemble}
+    ports: ["5432:5432"]
+    volumes:
+      - dbdata:/home/postgres/pgdata/data
+      - ./db/init:/docker-entrypoint-initdb.d   # 首次启动执行 001_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sensemble}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  emqx:
+    image: emqx/emqx:5.8
+    ports: ["1883:1883", "8883:8883", "18083:18083"]   # mqtt / mqtts / dashboard
+    volumes:
+      - emqxdata:/opt/emqx/data
+      - ./emqx/emqx.conf:/opt/emqx/etc/emqx.conf:ro     # 一机一 Token 认证/授权（回调后端）
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-minioadmin}
+    ports: ["9000:9000", "9001:9001"]   # api / console
+    volumes: [miniodata:/data]
+
+  backend:
+    build: ./backend
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      emqx:
+        condition: service_started
+    ports: ["8000:8000"]   # http://localhost:8000/docs  (Swagger 自动生成)
+    volumes: ["./backend/app:/app/app"]   # 开发热重载
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build: ./frontend/web      # 多阶段构建：Vite 打包 → nginx 托管 + 代理 /api
+    depends_on:
+      backend:
+        condition: service_started
+    ports: ["8080:80"]         # http://localhost:8080
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports: ["9090:9090"]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafanadata:/var/lib/grafana
+    depends_on: [prometheus]
+    ports: ["3000:3000"]       # http://localhost:3000（默认 admin/admin）
+    restart: unless-stopped
+
+volumes:
+  dbdata: {}
+  emqxdata: {}
+  miniodata: {}
+  promdata: {}
+  grafanadata: {}

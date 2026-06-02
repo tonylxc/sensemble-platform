@@ -1,0 +1,100 @@
+openapi: 3.0.3
+info:
+  title: 众感 Sensemble API
+  version: "1.0-MVP"
+  description: >
+    开放感知数据平台 MVP 接口契约。运行后端后，FastAPI 会在 /openapi.json 自动生成完整版，
+    /docs 提供 Swagger UI 在线测试。本文件为人读契约。
+servers:
+  - url: http://localhost:8000
+tags: [auth, devices, data, datasets]
+components:
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }      # 用户接口
+    DeviceToken: { type: apiKey, in: header, name: X-Device-Token }    # 设备上报
+  schemas:
+    Error:
+      type: object
+      properties: { status: {type: string}, code: {type: integer}, message: {type: string} }
+    Token:
+      type: object
+      properties: { access_token: {type: string}, token_type: {type: string}, role: {type: string} }
+    DataPoint:
+      type: object
+      required: [metric, value]
+      properties:
+        metric: {type: string, example: temperature}
+        value: {type: number, example: 23.5}
+        device_ts: {type: string, format: date-time}
+        lat: {type: number}
+        lon: {type: number}
+paths:
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      summary: 注册
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [username, password],
+          properties: { username: {type: string}, password: {type: string}, email: {type: string}, role: {type: string} } } } }
+      responses: { "200": { description: 注册成功，返回 Token, content: { application/json: { schema: { $ref: '#/components/schemas/Token' } } } } }
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: 登录（OAuth2 password 表单）
+      responses: { "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Token' } } } } }
+  /api/v1/auth/me:
+    get: { tags: [auth], summary: 当前用户, security: [{ BearerAuth: [] }], responses: { "200": { description: OK } } }
+  /api/v1/devices:
+    post:
+      tags: [devices]
+      summary: 注册设备（返回一次性设备 Token）
+      security: [{ BearerAuth: [] }]
+      responses: { "200": { description: "返回 device_id 与 device_token（仅此一次展示）" } }
+    get: { tags: [devices], summary: 我的设备列表, security: [{ BearerAuth: [] }], responses: { "200": { description: OK } } }
+  /api/v1/data:
+    post:
+      tags: [data]
+      summary: 设备上报（HTTP）
+      security: [{ DeviceToken: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/DataPoint' } } } }
+      responses:
+        "200": { description: "{ status: success, received: N }" }
+        "401": { description: 设备 Token 无效, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    get:
+      tags: [data]
+      summary: 查询时序
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: device_id, in: query, required: true, schema: { type: string } }
+        - { name: metric, in: query, schema: { type: string } }
+        - { name: start, in: query, schema: { type: string, format: date-time } }
+        - { name: end, in: query, schema: { type: string, format: date-time } }
+      responses: { "200": { description: "[{ts, value}]" } }
+  /api/v1/datasets:
+    post: { tags: [datasets], summary: "打包创建数据集（按 device+时间范围，自动算 DQS）", security: [{ BearerAuth: [] }], responses: { "200": { description: OK } } }
+    get:
+      tags: [datasets]
+      summary: 检索数据集
+      parameters:
+        - { name: keyword, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [dqs, downloads, time] } }
+      responses: { "200": { description: 数据集列表 } }
+  /api/v1/datasets/{id}/submit:
+    post: { tags: [datasets], summary: 提交审核, security: [{ BearerAuth: [] }], responses: { "200": { description: OK } } }
+  /api/v1/datasets/{id}/review:
+    post:
+      tags: [datasets]
+      summary: 审核（教师/管理员）
+      security: [{ BearerAuth: [] }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { result: {type: string, enum: [approved, rejected]}, comment: {type: string} } } } } }
+      responses: { "200": { description: OK } }
+  /api/v1/datasets/{id}/download:
+    get:
+      tags: [datasets]
+      summary: 下载（CSV/JSON）
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: format, in: query, schema: { type: string, enum: [csv, json] } }]
+      responses: { "200": { description: 文件流 } }

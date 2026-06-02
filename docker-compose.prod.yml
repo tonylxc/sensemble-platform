@@ -1,0 +1,90 @@
+# 众感 Sensemble — 生产编排（单机）。由 deploy.sh 配合使用。
+# 安全取向：DB / MinIO / EMQX 仪表盘只绑 127.0.0.1（需 SSH 隧道访问）；
+#           公网仅开 80(前端) / 8000(API) / 1883(设备 MQTT)。
+services:
+  db:
+    image: timescale/timescaledb-ha:pg16
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - dbdata:/home/postgres/pgdata/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    ports: ["127.0.0.1:5432:5432"]        # 仅本机（供造数脚本/运维）
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  emqx:
+    image: emqx/emqx:5.8
+    volumes:
+      - emqxdata:/opt/emqx/data
+      - ./emqx/emqx.conf:/opt/emqx/etc/emqx.conf:ro
+    ports:
+      - "1883:1883"                        # 设备 MQTT（公网）
+      - "127.0.0.1:18083:18083"            # 仪表盘仅本机（SSH 隧道访问）
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
+    volumes: [miniodata:/data]
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      emqx:
+        condition: service_started
+    ports: ["8000:8000"]                   # API/Swagger（公网；如不需可改 127.0.0.1:8000:8000）
+    restart: unless-stopped
+    # 用镜像默认 CMD（uvicorn，无 --reload）
+
+  frontend:
+    build: ./frontend/web
+    depends_on:
+      backend:
+        condition: service_started
+    ports: ["80:80"]                       # 前端（公网；宝塔占 80 时改 "8080:80"）
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports: ["127.0.0.1:9090:9090"]         # 仅本机（SSH 隧道访问）
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafanadata:/var/lib/grafana
+    depends_on: [prometheus]
+    ports: ["127.0.0.1:3000:3000"]         # 仅本机（SSH 隧道访问）
+    restart: unless-stopped
+
+volumes:
+  dbdata: {}
+  emqxdata: {}
+  miniodata: {}
+  promdata: {}
+  grafanadata: {}

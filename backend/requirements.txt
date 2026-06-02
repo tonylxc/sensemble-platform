@@ -1,0 +1,13 @@
+fastapi==0.115.*
+uvicorn[standard]==0.30.*
+SQLAlchemy==2.0.*
+psycopg2-binary==2.9.*
+pydantic==2.*
+pydantic-settings==2.*
+passlib[bcrypt]==1.7.*
+PyJWT==2.*
+paho-mqtt==2.*
+numpy==2.*
+python-multipart==0.0.*
+prometheus-fastapi-instrumentator==7.*
+bcrypt==4.0.1  # 钉版：passlib 1.7.4 与 bcrypt>=4.1 不兼容
