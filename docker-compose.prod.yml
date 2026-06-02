@@ -81,7 +81,8 @@ services:
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
       - grafanadata:/var/lib/grafana
     depends_on: [prometheus]
-    ports: ["127.0.0.1:3000:3000"]         # 仅本机（SSH 隧道访问）
+    # 仅本机（SSH 隧道访问）。默认 3001 以避让 3000 上的其他服务（如 open-webui）；可在 .env 设 GRAFANA_PORT 覆盖。
+    ports: ["127.0.0.1:${GRAFANA_PORT:-3001}:3000"]
     restart: unless-stopped
 
 volumes:
