@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS devices (
     sample_interval INT DEFAULT 60,               -- 秒，用于完整度/离线判定
     status          VARCHAR(16) NOT NULL DEFAULT 'active',
     last_seen       TIMESTAMPTZ,
+    offline_alerted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_devices_owner ON devices(owner_id);

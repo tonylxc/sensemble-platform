@@ -8,6 +8,7 @@ from .config import settings
 from .database import SessionLocal, engine, Base
 from .security import hash_password
 from .mqtt_ingest import start_mqtt
+from .monitor import start_offline_monitor
 from . import models
 from .routers import auth, devices, data, datasets, internal, keys, open_data, notifications, stats
 
@@ -27,6 +28,20 @@ def ensure_admin():
         db.close()
 
 
+def migrate():
+    """无 Alembic 时的轻量幂等迁移：对已存在的库补充新列。"""
+    from sqlalchemy import text
+    stmts = [
+        "ALTER TABLE devices ADD COLUMN IF NOT EXISTS offline_alerted BOOLEAN NOT NULL DEFAULT FALSE",
+    ]
+    with engine.begin() as conn:
+        for s in stmts:
+            try:
+                conn.execute(text(s))
+            except Exception:
+                pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 表结构由 db/init/001_init.sql 在 DB 首启创建；此处兜底建表（不含 Timescale 超表转换）
@@ -35,10 +50,15 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
     try:
+        migrate()
+    except Exception:
+        pass
+    try:
         ensure_admin()
     except Exception:
         pass
     start_mqtt()
+    start_offline_monitor()
     yield
 
 

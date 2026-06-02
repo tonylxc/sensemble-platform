@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     mqtt_backend_user: str = "backend-ingest"
     mqtt_backend_password: str = "backend-ingest-secret"
     mqtt_auth_secret: str = ""
+    rate_limit_min_interval: float = 0.0      # 每设备最小上报间隔(秒)，0=不限流
+    offline_monitor_enabled: bool = True
+    offline_check_interval: int = 60          # 离线巡检周期(秒)
 
     @property
     def database_url(self) -> str:
