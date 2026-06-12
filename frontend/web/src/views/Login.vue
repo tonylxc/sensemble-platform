@@ -38,7 +38,7 @@ async function submit() {
     <div class="panel">
       <div class="form">
         <h2>{{ tab === 'login' ? '登录' : '注册' }}</h2>
-        <p class="muted small">默认管理员 admin / admin123，或直接注册新账号</p>
+        <p class="muted small">首次使用请点「注册」创建账号（学生请选「学生」角色）</p>
         <div class="tabs">
           <button :class="{ on: tab === 'login' }" @click="tab = 'login'">登录</button>
           <button :class="{ on: tab === 'register' }" @click="tab = 'register'">注册</button>
