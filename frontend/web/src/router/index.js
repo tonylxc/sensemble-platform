@@ -16,6 +16,7 @@ const routes = [
       { path: 'visualize', component: () => import('../views/Visualize.vue'), meta: { title: '数据可视化' } },
       { path: 'datasets', component: () => import('../views/Datasets.vue'), meta: { title: '数据集广场' } },
       { path: 'keys', component: () => import('../views/Keys.vue'), meta: { title: 'API 密钥' } },
+      { path: 'help', component: () => import('../views/Help.vue'), meta: { title: '使用帮助' } },
       { path: 'review', component: () => import('../views/Review.vue'), meta: { title: '审核队列', roles: ['teacher', 'admin'] } },
       { path: 'stats', component: () => import('../views/Stats.vue'), meta: { title: '统计看板', roles: ['teacher', 'admin'] } }
     ]
