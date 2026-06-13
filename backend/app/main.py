@@ -33,6 +33,7 @@ def migrate():
     from sqlalchemy import text
     stmts = [
         "ALTER TABLE devices ADD COLUMN IF NOT EXISTS offline_alerted BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE devices ADD COLUMN IF NOT EXISTS token VARCHAR(64)",
         "ALTER TABLE datasets ADD COLUMN IF NOT EXISTS archive_path VARCHAR(256)",
     ]
     with engine.begin() as conn:

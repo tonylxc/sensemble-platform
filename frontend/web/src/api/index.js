@@ -13,8 +13,9 @@ export const authApi = {
 }
 
 export const deviceApi = {
-  list: () => client.get('/api/v1/devices'),
+  list: (params) => client.get('/api/v1/devices', { params }),
   create: (data) => client.post('/api/v1/devices', data),
+  rotateToken: (id) => client.post(`/api/v1/devices/${id}/token/rotate`),
   deactivate: (id, purge = false) => client.delete(`/api/v1/devices/${id}`, { params: { purge } })
 }
 

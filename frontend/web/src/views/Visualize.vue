@@ -1,13 +1,18 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { deviceApi, dataApi, datasetApi } from '../api'
+import { useAuthStore } from '../stores/auth'
 import LineChart from '../components/LineChart.vue'
 import { toast } from '../toast'
+
+const auth = useAuthStore()
+const isTeacher = auth.role === 'teacher' || auth.role === 'admin'
 
 const devices = ref([])
 const deviceId = ref('')
 const metric = ref('temperature')
 const hours = ref(24)
+const autoSec = ref(0)
 const rows = ref([])
 const lineOption = ref(null)
 const heatOption = ref(null)
@@ -18,15 +23,14 @@ const pack = ref({ name: '', sensor_type: 'DHT22', accuracy: '±0.5℃', calibra
 
 async function loadDevices() {
   try {
-    devices.value = (await deviceApi.list()).data
+    // 教师/管理员看全平台设备；学生只看自己的
+    devices.value = (await deviceApi.list(isTeacher ? { all_devices: true } : undefined)).data
     if (devices.value.length) deviceId.value = devices.value[0].device_id
     await refresh()
   } catch (e) { /* 后端未起 */ }
 }
 
-async function refresh() {
-  await Promise.all([queryLine(), loadHeat()])
-}
+async function refresh() { await Promise.all([queryLine(), loadHeat()]) }
 
 async function queryLine() {
   if (!deviceId.value) { lineOption.value = null; rows.value = []; return }
@@ -36,10 +40,13 @@ async function queryLine() {
     rows.value = data
     const c = colors[metric.value] || '#0E8C82'
     lineOption.value = {
-      grid: { left: 46, right: 18, top: 24, bottom: 34 }, tooltip: { trigger: 'axis' },
+      grid: { left: 46, right: 18, top: 24, bottom: 64 },
+      tooltip: { trigger: 'axis' },
       xAxis: { type: 'time' }, yAxis: { type: 'value', scale: true },
+      // 滚轮/拖动缩放看细节；slider 在底部
+      dataZoom: [{ type: 'inside' }, { type: 'slider', height: 20, bottom: 16 }],
       series: [{
-        type: 'line', smooth: true, showSymbol: false, name: metric.value,
+        type: 'line', smooth: true, showSymbol: false, sampling: 'lttb', name: metric.value,
         data: data.map(x => [x.ts, x.value]),
         lineStyle: { color: c, width: 2 }, areaStyle: { color: c + '22' }
       }]
@@ -96,7 +103,13 @@ async function doPack() {
   } catch (e) { toast(e?.response?.data?.detail || '打包失败') }
 }
 
+let timer = null
+function applyAuto() {
+  if (timer) { clearInterval(timer); timer = null }
+  if (autoSec.value > 0) timer = setInterval(refresh, autoSec.value * 1000)
+}
 onMounted(loadDevices)
+onUnmounted(() => { if (timer) clearInterval(timer) })
 </script>
 
 <template>
@@ -113,13 +126,20 @@ onMounted(loadDevices)
       <option :value="24">最近 24 小时</option>
       <option :value="168">最近 7 天</option>
     </select>
+    <select v-model.number="autoSec" @change="applyAuto" title="自动刷新间隔">
+      <option :value="0">⟳ 不自动刷新</option>
+      <option :value="3">每 3 秒</option>
+      <option :value="5">每 5 秒</option>
+      <option :value="10">每 10 秒</option>
+    </select>
     <button class="btn gh sm" @click="refresh">刷新</button>
     <button class="btn pri sm" :disabled="!rows.length" @click="showPack = true">打包为数据集</button>
+    <span v-if="isTeacher" class="muted small">（已显示全平台设备）</span>
   </div>
 
   <div class="card">
-    <h3>时间序列（{{ deviceId || '无设备' }} · {{ metric }}）<span class="muted small">{{ rows.length }} 点</span></h3>
-    <LineChart v-if="lineOption && rows.length" :option="lineOption" height="300px" />
+    <h3>时间序列（{{ deviceId || '无设备' }} · {{ metric }}）<span class="muted small">{{ rows.length }} 点 · 滚轮/拖动可缩放看细节{{ autoSec ? ` · 每${autoSec}s自动刷新` : '' }}</span></h3>
+    <LineChart v-if="lineOption && rows.length" :option="lineOption" height="340px" />
     <div v-else class="muted small">无数据。请先在「我的设备」灌入测试数据或运行 tools/simulate.py。</div>
   </div>
 
@@ -132,7 +152,7 @@ onMounted(loadDevices)
   <div class="mask" v-if="showPack" @click.self="showPack = false">
     <div class="modal">
       <h3>打包为数据集</h3>
-      <p class="muted small">将当前设备在所选时间范围的数据打包，自动计算 DQS（三维 v1）。</p>
+      <p class="muted small">将当前设备在所选时间范围的数据打包，自动计算 DQS。</p>
       <label>数据集名称</label><input v-model="pack.name" :placeholder="`${deviceId} ${metric}`" style="width:100%">
       <label>传感器型号</label><input v-model="pack.sensor_type" style="width:100%">
       <label>精度</label><input v-model="pack.accuracy" style="width:100%">

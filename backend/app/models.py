@@ -25,6 +25,7 @@ class Device(Base):
     type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     sensors: Mapped[dict] = mapped_column(JSONB, default=dict)
     token_hash: Mapped[str] = mapped_column(String(255))
+    token: Mapped[str | None] = mapped_column(String(64), nullable=True)  # 明文设备 Token（供随时查看/复制；低权限凭据）
     location: Mapped[str | None] = mapped_column(String(64), nullable=True)
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     lon: Mapped[float | None] = mapped_column(Float, nullable=True)

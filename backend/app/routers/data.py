@@ -39,7 +39,7 @@ def ingest(points: list[DataPoint], db: Session = Depends(get_db),
 @router.get("")
 def query(device_id: str, metric: Optional[str] = None,
           start: Optional[datetime] = None, end: Optional[datetime] = None,
-          limit: int = Query(5000, le=50000),
+          limit: int = Query(20000, le=50000),
           db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
     """时序查询（FR-4.1）。"""
     conds = [models.SensorData.device_id == device_id]
