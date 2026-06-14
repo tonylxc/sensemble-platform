@@ -5,8 +5,9 @@
 - 学生看不到思考题的正确答案（answer 字段对学生隐藏）。
 """
 from typing import Any, Optional
+import io
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,7 @@ from .. import llm, models
 from ..deps import get_current_user, require_roles
 from ..teaching import (CourseNode, LogKind, Quiz, QuizType, StudentLog,
                         get_session, grade_choice)
+from ..teaching_export import TeachingDataExporter
 
 router = APIRouter()
 
@@ -285,3 +287,43 @@ async def ai_feedback(node_id: int, db: AsyncSession = Depends(get_session),
     if not fb:
         return {"feedback": "（AI 助教暂未配置或暂时不可用。）", "ai": False}
     return {"feedback": fb, "ai": True}
+
+
+# ========== 数据导出（教师专用） ==========
+
+@router.get("/export-data")
+async def export_teaching_data(
+    student_id: Optional[int] = None,
+    format: str = Query('csv', regex='^(csv|xlsx)$'),
+    db: AsyncSession = Depends(get_session),
+    user: models.User = Depends(require_roles("teacher"))
+):
+    """
+    导出学生作答数据 + 设备传感器时间序列（仅教师可调用）。
+
+    查询参数：
+      - student_id: 学生 ID（可选，不指定则导出所有学生）
+      - format: 输出格式（'csv' 或 'xlsx'，默认 'csv'）
+
+    返回：文件下载响应
+
+    示例：
+      GET /api/v1/teaching/export-data?format=xlsx
+      GET /api/v1/teaching/export-data?student_id=5&format=csv
+    """
+    exporter = TeachingDataExporter(db)
+
+    try:
+        file_bytes, mime_type, filename = await exporter.export_student_logs(
+            student_id=student_id,
+            format=format
+        )
+    except Exception as e:
+        raise HTTPException(500, f"导出失败：{str(e)}")
+
+    return FileResponse(
+        io.BytesIO(file_bytes),
+        media_type=mime_type,
+        filename=filename,
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
