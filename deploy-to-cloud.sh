@@ -14,7 +14,7 @@ REPO_URL="https://github.com/tonylxc/sensemble-platform.git"
 BRANCH="main"
 
 # 第一步：更新代码
-echo "[1/5] 更新代码库..."
+echo "[1/6] 更新代码库..."
 if [ -d "$PROJECT_DIR/.git" ]; then
     cd "$PROJECT_DIR"
     git fetch origin
@@ -31,26 +31,69 @@ fi
 echo "[✓] 代码已更新"
 echo ""
 
+# 第一步加半：检查并创建 .env 文件
+echo "[1.5/6] 检查环境变量配置..."
+if [ ! -f "$PROJECT_DIR/.env" ]; then
+    echo "[!] 未找到 .env 文件，正在创建..."
+    cat > "$PROJECT_DIR/.env" << 'ENVEOF'
+SECRET_KEY=change-me-in-prod-please
+ACCESS_TOKEN_EXPIRE_MINUTES=720
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=admin123
+CORS_ORIGINS=*
+FRONTEND_PORT=80
+RATE_LIMIT_MIN_INTERVAL=0
+DB_HOST=db
+DB_PORT=5432
+DB_USER=sensemble
+DB_PASSWORD=sensemble
+DB_NAME=sensemble
+MQTT_HOST=emqx
+MQTT_PORT=1883
+MQTT_TOPIC=sensemble/+/data
+MQTT_ENABLED=true
+MQTT_BACKEND_USER=backend-ingest
+MQTT_BACKEND_PASSWORD=backend-ingest-secret
+MQTT_AUTH_SECRET=change-me-internal
+MINIO_ENDPOINT=minio:9000
+MINIO_USER=minioadmin
+MINIO_PASSWORD=minioadmin
+GRAFANA_PASSWORD=admin
+LLM_BASE_URL=
+LLM_API_KEY=
+LLM_MODEL=qwen2.5:7b
+ENVEOF
+    echo "[✓] .env 文件已创建"
+    echo "⚠️  注意：请在生产环境中修改所有密码！"
+else
+    echo "[✓] .env 文件已存在"
+fi
+echo ""
+
 # 第二步：停止当前容器
-echo "[2/5] 停止现有容器..."
+echo "[2/6] 停止现有容器..."
 docker-compose -f docker-compose.prod.yml down || true
 echo "[✓] 容器已停止"
 echo ""
 
 # 第三步：重建镜像
-echo "[3/5] 重新构建 Docker 镜像..."
+echo "[3/6] 重新构建 Docker 镜像..."
 docker-compose -f docker-compose.prod.yml build --no-cache
 echo "[✓] 镜像构建完成"
 echo ""
 
 # 第四步：启动新容器
-echo "[4/5] 启动新容器..."
+echo "[4/6] 启动新容器..."
 docker-compose -f docker-compose.prod.yml up -d
 echo "[✓] 容器已启动"
 echo ""
 
-# 第五步：验证部署
-echo "[5/5] 验证部署..."
+# 第五步：等待容器稳定
+echo "[5/6] 等待容器完全启动..."
+sleep 10
+
+# 第六步：验证部署
+echo "[6/6] 验证部署..."
 sleep 5
 
 # 检查容器状态
