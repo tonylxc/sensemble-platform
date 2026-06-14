@@ -110,33 +110,42 @@ function processLatexInHTML(html) {
   let result = html
 
   // 第 1 步：处理 $$ ... $$ 公式（必须先处理，避免被 $ ... $ 搞乱）
-  // 使用更宽松的正则，支持换行
   result = result.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
     try {
       const cleaned = formula.trim()
+      if (!cleaned) return match
       const rendered = katex.renderToString(cleaned, {
         throwOnError: false,
-        displayMode: true,  // 行间公式
+        displayMode: true,
       })
       return `<div class="math-display" style="text-align:center;margin:12px 0;overflow-x:auto">${rendered}</div>`
     } catch (e) {
-      console.warn('公式渲染失败:', formula, e)
-      return match  // 保留原文
+      console.warn('公式渲染失败 (display):', formula, e)
+      return match
     }
   })
 
   // 第 2 步：处理 $ ... $ 公式（行内）
-  // 使用非贪心匹配，但要排除 HTML 标签内部
-  result = result.replace(/(?<!\$)\$(?!\$)([^\$\n<>]*?[^\$\n<>\s])\$(?!\$)/g, (match, formula) => {
+  // 改进的正则：更宽松地匹配 $ 之间的内容
+  result = result.replace(/\$([^\$\n]+?)\$/g, (match, formula) => {
+    // 跳过空白公式
+    if (!formula.trim()) return match
+
+    // 跳过已经是 HTML 的内容
+    if (formula.includes('<') || formula.includes('>')) return match
+
+    // 跳过 $$ 模式（在第一步已处理）
+    if (formula.includes('$')) return match
+
     try {
       const rendered = katex.renderToString(formula, {
         throwOnError: false,
-        displayMode: false,  // 行内公式
+        displayMode: false,
       })
       return `<span class="math-inline" style="margin:0 2px">${rendered}</span>`
     } catch (e) {
-      console.warn('公式渲染失败:', formula, e)
-      return match
+      console.warn('公式渲染失败 (inline):', formula, e)
+      return match  // 保留原文
     }
   })
 
