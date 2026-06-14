@@ -26,6 +26,8 @@ const fbBusy = ref(false)
 // 教师弹窗
 const showNode = ref(false)
 const nodeForm = ref({ id: null, title: '', content: '', parent_id: null })
+const showOrganize = ref(false)
+const organizeForm = ref({ id: null, title: '', current_parent_id: null, new_parent_id: null })
 const showQuiz = ref(false)
 const quizForm = ref({ qtype: 'single', stem: '', options: [{ key: 'A', text: '' }, { key: 'B', text: '' }], answer: '', score: 1 })
 
@@ -46,8 +48,11 @@ async function openNode(id) {
   try {
     sel.value = (await teachingApi.node(id)).data
     answers.value = {}; results.value = {}; reflection.value = ''; aiAns.value = ''; aiFb.value = ''
-    // 等 DOM 更新完毕后，异步渲染公式（避免阻塞主线程）
+    // 等 DOM 更新完毕后，清除旧的渲染标记并重新渲染公式
     await nextTick()
+    document.querySelectorAll('.rich, .qstem, .aibox').forEach(el => {
+      el.classList.remove('katex-rendered')
+    })
     renderMathAsync()
   } catch (e) { toast('加载失败') }
 }
@@ -109,14 +114,13 @@ function processLatexInHTML(html) {
   let result = html
 
   // 第 1 步：处理 $$ ... $$ 公式（必须先处理，避免被 $ ... $ 搞乱）
-  result = result.replace(/\$\$([^\$]+)\$\$/g, (match, formula) => {
+  // 使用更宽松的正则，支持换行
+  result = result.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
     try {
-      const rendered = katex.renderToString(formula, {
+      const cleaned = formula.trim()
+      const rendered = katex.renderToString(cleaned, {
         throwOnError: false,
         displayMode: true,  // 行间公式
-        macros: {
-          "\\mathcal": "\\text{Cal}",  // 常见宏支持
-        }
       })
       return `<div class="math-display" style="text-align:center;margin:12px 0;overflow-x:auto">${rendered}</div>`
     } catch (e) {
@@ -126,13 +130,8 @@ function processLatexInHTML(html) {
   })
 
   // 第 2 步：处理 $ ... $ 公式（行内）
-  // 正则：匹配 $ 但不是 $$，使用负向预查
-  result = result.replace(/(?<!\$)\$(?!\$)([^\$]+?)\$(?!\$)/g, (match, formula) => {
-    // 避免渲染已经是 HTML 标签的内容（如 <span>$...$</span> 中的 $）
-    if (formula.includes('<') || formula.includes('>')) {
-      return match
-    }
-
+  // 使用非贪心匹配，但要排除 HTML 标签内部
+  result = result.replace(/(?<!\$)\$(?!\$)([^\$\n<>]*?[^\$\n<>\s])\$(?!\$)/g, (match, formula) => {
     try {
       const rendered = katex.renderToString(formula, {
         throwOnError: false,
@@ -208,6 +207,46 @@ async function saveNode() {
     if (nodeForm.value.id) await openNode(nodeForm.value.id)
     toast('已保存')
   } catch (e) { toast(e?.response?.data?.detail || '保存失败') }
+}
+
+// ---- 教师：知识点整理（移动/分组） ----
+function organizeNode() {
+  organizeForm.value = {
+    id: sel.value.id,
+    title: sel.value.title,
+    current_parent_id: sel.value.parent_id,
+    new_parent_id: sel.value.parent_id
+  }
+  showOrganize.value = true
+}
+async function moveNode() {
+  const form = organizeForm.value
+  if (form.new_parent_id === form.id) {
+    toast('不能将节点移动到自己下面')
+    return
+  }
+  try {
+    await teachingApi.updateNode(form.id, { parent_id: form.new_parent_id })
+    showOrganize.value = false
+    await loadTree()
+    await openNode(form.id)
+    toast('已移动')
+  } catch (e) {
+    toast(e?.response?.data?.detail || '移动失败')
+  }
+}
+// 生成可选的父节点列表（排除当前节点及其子树）
+function getAvailableParents() {
+  const currentId = organizeForm.value.id
+  const flatten = []
+  const walk = (nodes) => {
+    for (const n of nodes || []) {
+      if (n.id !== currentId) flatten.push(n)
+      if (n.children?.length) walk(n.children)
+    }
+  }
+  walk(tree.value)
+  return flatten
 }
 async function delNode() {
   if (!confirm('删除该知识点及其子树、思考题与相关记录？此操作不可恢复。')) return
@@ -285,6 +324,7 @@ const qtypeName = { single: '单选', multiple: '多选', short_answer: '简答'
           <span v-if="isTeacher" style="display:flex;gap:6px">
             <button class="btn gh sm" @click="newChild">+ 子知识点</button>
             <button class="btn gh sm" @click="editNode">编辑</button>
+            <button class="btn gh sm" @click="organizeNode">🔗 整理</button>
             <button class="btn gh sm" @click="newQuiz">+ 思考题</button>
             <button class="btn no sm" @click="delNode">删除</button>
           </span>
@@ -362,6 +402,29 @@ const qtypeName = { single: '单选', multiple: '多选', short_answer: '简答'
       <div class="acts">
         <button class="btn gh" @click="showNode = false">取消</button>
         <button class="btn pri" @click="saveNode">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 教师：知识点整理弹窗 -->
+  <div class="mask" v-if="showOrganize" @click.self="showOrganize = false">
+    <div class="modal">
+      <h3>整理知识点：{{ organizeForm.title }}</h3>
+      <label>当前所属：<b>{{ organizeForm.current_parent_id ? tree.find(n => n.id === organizeForm.current_parent_id)?.title || '？' : '（顶级）' }}</b></label>
+      <label>移动到：</label>
+      <select v-model.number="organizeForm.new_parent_id" style="width:100%">
+        <option :value="null">（顶级）</option>
+        <optgroup v-for="parent in getAvailableParents().filter(n => !n.parent_id)" :label="parent.title" :key="parent.id">
+          <option :value="parent.id">└ {{ parent.title }}</option>
+          <option v-for="child in getAvailableParents().filter(n => n.parent_id === parent.id)" :key="child.id" :value="child.id">
+            └─ {{ child.title }}
+          </option>
+        </optgroup>
+      </select>
+      <p class="muted small" style="margin-top:12px;font-size:12px">💡 选择新的父知识点，或「顶级」来独立化它</p>
+      <div class="acts">
+        <button class="btn gh" @click="showOrganize = false">取消</button>
+        <button class="btn pri" @click="moveNode">确定移动</button>
       </div>
     </div>
   </div>
