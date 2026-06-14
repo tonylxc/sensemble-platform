@@ -7,7 +7,8 @@
 from typing import Any, Optional
 import io
 
-from fastapi import APIRouter, Depends, HTTPException, Query, FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
+from starlette.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

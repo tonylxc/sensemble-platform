@@ -8,7 +8,10 @@ import 'katex/dist/katex.min.css'
 
 const auth = useAuthStore()
 const isTeacher = computed(() => auth.role === 'teacher' || auth.role === 'admin')
+const isAdmin = computed(() => auth.role === 'admin')
 
+// 管理员默认看所有课程，普通用户默认看 EE-TEST-2026
+const courseCode = ref(auth.role === 'admin' ? '' : 'EE-TEST-2026')
 const tree = ref([])
 const sel = ref(null)            // 选中节点详情 {id,title,content,quizzes:[...]}
 const answers = ref({})          // quizId -> 作答
@@ -37,7 +40,7 @@ const flatTree = computed(() => {
 })
 
 async function loadTree() {
-  try { tree.value = (await teachingApi.nodes()).data } catch (e) { /* 后端未起 */ }
+  try { tree.value = (await teachingApi.nodes(courseCode.value)).data } catch (e) { console.error('加载知识点失败:', e) }
 }
 async function openNode(id) {
   try {
@@ -252,6 +255,11 @@ const qtypeName = { single: '单选', multiple: '多选', short_answer: '简答'
   <div class="controls">
     <b style="font-size:15px">🎓 教学中心</b>
     <span class="muted small">知识点 → 思考题 → 心得 → AI 助教答疑/反馈</span>
+    <select v-model="courseCode" @change="loadTree" style="margin-left:20px">
+      <option v-if="isAdmin" value="">📚 全部课程（管理员视图）</option>
+      <option value="EE-TEST-2026">EE-TEST-2026 (电气测试 2026)</option>
+      <option value="">🔍 其他课程</option>
+    </select>
     <button v-if="isTeacher" class="btn pri sm" style="margin-left:auto" @click="newRoot">+ 根知识点</button>
   </div>
 
