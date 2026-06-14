@@ -1,8 +1,10 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { teachingApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/toast'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 
 const auth = useAuthStore()
 const isTeacher = computed(() => auth.role === 'teacher' || auth.role === 'admin')
@@ -41,8 +43,108 @@ async function openNode(id) {
   try {
     sel.value = (await teachingApi.node(id)).data
     answers.value = {}; results.value = {}; reflection.value = ''; aiAns.value = ''; aiFb.value = ''
+    // 等 DOM 更新完毕后，异步渲染公式（避免阻塞主线程）
+    await nextTick()
+    renderMathAsync()
   } catch (e) { toast('加载失败') }
 }
+
+// ---- LaTeX 公式渲染（异步，非阻塞） ----
+/**
+ * 使用 requestIdleCallback 异步渲染 LaTeX 公式（不阻塞主线程）
+ * 扫描 .rich 和 .qstem 内的 $...$ 和 $$...$$ 公式，调用 KaTeX 渲染
+ */
+function renderMathAsync() {
+  if ('requestIdleCallback' in window) {
+    // 优先级：空闲时执行
+    requestIdleCallback(() => {
+      renderMath()
+    }, { timeout: 2000 })  // 最多等待 2 秒
+  } else {
+    // 降级：使用 setTimeout（React 中常用做法）
+    setTimeout(() => {
+      renderMath()
+    }, 0)
+  }
+}
+
+/**
+ * 遍历 DOM，查找并渲染 LaTeX 公式
+ * 处理流程：
+ *   1. 识别 $ 和 $$ 公式（不破坏已渲染内容）
+ *   2. 用 KaTeX 转换为 HTML
+ *   3. 替换为 <span class="math-..."> 或 <div class="math-display">
+ */
+function renderMath() {
+  // 扫描所有富文本区域
+  const richElements = document.querySelectorAll('.rich, .qstem, .aibox')
+
+  richElements.forEach((elem) => {
+    // 跳过已渲染的（含 katex-render 类）
+    if (elem.classList.contains('katex-rendered')) return
+
+    try {
+      // 获取当前 HTML，但避免破坏已渲染的 KaTeX（通过保护包含 .katex 的节点）
+      const html = elem.innerHTML
+      const processed = processLatexInHTML(html)
+
+      if (processed !== html) {
+        elem.innerHTML = processed
+      }
+      elem.classList.add('katex-rendered')
+    } catch (e) {
+      console.error('LaTeX 渲染出错:', e)
+    }
+  })
+}
+
+/**
+ * 处理 HTML 字符串中的 LaTeX 公式
+ * 返回：包含已渲染公式的 HTML 字符串
+ */
+function processLatexInHTML(html) {
+  let result = html
+
+  // 第 1 步：处理 $$ ... $$ 公式（必须先处理，避免被 $ ... $ 搞乱）
+  result = result.replace(/\$\$([^\$]+)\$\$/g, (match, formula) => {
+    try {
+      const rendered = katex.renderToString(formula, {
+        throwOnError: false,
+        displayMode: true,  // 行间公式
+        macros: {
+          "\\mathcal": "\\text{Cal}",  // 常见宏支持
+        }
+      })
+      return `<div class="math-display" style="text-align:center;margin:12px 0;overflow-x:auto">${rendered}</div>`
+    } catch (e) {
+      console.warn('公式渲染失败:', formula, e)
+      return match  // 保留原文
+    }
+  })
+
+  // 第 2 步：处理 $ ... $ 公式（行内）
+  // 正则：匹配 $ 但不是 $$，使用负向预查
+  result = result.replace(/(?<!\$)\$(?!\$)([^\$]+?)\$(?!\$)/g, (match, formula) => {
+    // 避免渲染已经是 HTML 标签的内容（如 <span>$...$</span> 中的 $）
+    if (formula.includes('<') || formula.includes('>')) {
+      return match
+    }
+
+    try {
+      const rendered = katex.renderToString(formula, {
+        throwOnError: false,
+        displayMode: false,  // 行内公式
+      })
+      return `<span class="math-inline" style="margin:0 2px">${rendered}</span>`
+    } catch (e) {
+      console.warn('公式渲染失败:', formula, e)
+      return match
+    }
+  })
+
+  return result
+}
+
 onMounted(loadTree)
 
 // ---- 答题 ----
@@ -68,13 +170,23 @@ async function submitReflection() {
 async function askAi() {
   if (!aiQ.value.trim()) return
   aiBusy.value = true; aiAns.value = ''
-  try { aiAns.value = (await teachingApi.aiAsk(sel.value.id, aiQ.value)).data.answer }
+  try {
+    aiAns.value = (await teachingApi.aiAsk(sel.value.id, aiQ.value)).data.answer
+    // AI 回答后，异步渲染公式
+    await nextTick()
+    renderMathAsync()
+  }
   catch (e) { aiAns.value = 'AI 调用失败，请稍后再试。' }
   finally { aiBusy.value = false }
 }
 async function getFeedback() {
   fbBusy.value = true; aiFb.value = ''
-  try { aiFb.value = (await teachingApi.aiFeedback(sel.value.id)).data.feedback }
+  try {
+    aiFb.value = (await teachingApi.aiFeedback(sel.value.id)).data.feedback
+    // AI 反馈后，异步渲染公式
+    await nextTick()
+    renderMathAsync()
+  }
   catch (e) { aiFb.value = 'AI 调用失败，请稍后再试。' }
   finally { fbBusy.value = false }
 }
@@ -293,8 +405,11 @@ const qtypeName = { single: '单选', multiple: '多选', short_answer: '简答'
 .detail { display: flex; flex-direction: column; gap: 16px; }
 .rich { font-size: 14px; line-height: 1.8; color: #0f172a; }
 .rich :deep(img) { max-width: 100%; }
+.rich :deep(.math-display) { margin: 12px 0 !important; text-align: center; overflow-x: auto; }
+.rich :deep(.math-inline) { margin: 0 2px; }
 .quiz { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
 .qstem { font-size: 14px; margin-bottom: 8px; }
+.qstem :deep(.math-inline) { margin: 0 2px; }
 .opts { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
 .opt { font-size: 13.5px; cursor: pointer; }
 .opt input { margin-right: 6px; }
@@ -304,4 +419,6 @@ const qtypeName = { single: '单选', multiple: '多选', short_answer: '简答'
 .aibox { white-space: pre-wrap; background: #0B1220; color: #d8e1ec; border-radius: 10px; padding: 12px 14px;
   font-size: 13.5px; line-height: 1.7; margin-top: 10px; }
 .aibox.fb { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.aibox :deep(.math-display) { background: #fff; color: #000; border-radius: 6px; padding: 10px; margin: 10px 0; }
+.aibox :deep(.math-inline) { color: #d8e1ec; margin: 0 2px; }
 </style>
