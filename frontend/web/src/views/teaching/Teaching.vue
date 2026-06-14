@@ -48,11 +48,8 @@ async function openNode(id) {
   try {
     sel.value = (await teachingApi.node(id)).data
     answers.value = {}; results.value = {}; reflection.value = ''; aiAns.value = ''; aiFb.value = ''
-    // 等 DOM 更新完毕后，清除旧的渲染标记并重新渲染公式
+    // 等 DOM 更新完毕后，异步渲染公式（renderMathAsync 会清除旧标记）
     await nextTick()
-    document.querySelectorAll('.rich, .qstem, .aibox').forEach(el => {
-      el.classList.remove('katex-rendered')
-    })
     renderMathAsync()
   } catch (e) { toast('加载失败') }
 }
@@ -63,6 +60,11 @@ async function openNode(id) {
  * 扫描 .rich 和 .qstem 内的 $...$ 和 $$...$$ 公式，调用 KaTeX 渲染
  */
 function renderMathAsync() {
+  // 清除所有旧的渲染标记，确保内容变化时能重新渲染
+  document.querySelectorAll('.katex-rendered').forEach(el => {
+    el.classList.remove('katex-rendered')
+  })
+
   if ('requestIdleCallback' in window) {
     // 优先级：空闲时执行
     requestIdleCallback(() => {
