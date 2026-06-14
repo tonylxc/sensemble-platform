@@ -1,8 +1,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { teachingApi } from '../api'
-import { useAuthStore } from '../stores/auth'
-import { toast } from '../toast'
+import { teachingApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
+import { toast } from '@/toast'
 
 const auth = useAuthStore()
 const isTeacher = computed(() => auth.role === 'teacher' || auth.role === 'admin')
