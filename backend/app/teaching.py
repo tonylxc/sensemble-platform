@@ -44,6 +44,7 @@ class QuizType(str, enum.Enum):
 class LogKind(str, enum.Enum):
     reflection = "reflection"       # 心得体会
     quiz_answer = "quiz_answer"     # 思考题作答
+    ai_chat = "ai_chat"             # AI 助教问答
 
 
 # ---------- 1. 课程知识点（树状上下级） ----------

@@ -79,3 +79,15 @@ def test_teaching_multiple_choice_grading(client, make_user):
     # 少选 → 错
     r = client.post(f"/api/v1/teaching/quizzes/{qid}/answer", json={"answer": ["A"]}, headers=student)
     assert r.json()["is_correct"] is False and r.json()["score"] == 0
+
+
+def test_ai_graceful_without_llm(client, make_user):
+    """CI 无 LLM_BASE_URL → AI 端点优雅降级（ai=False），不 500。"""
+    teacher = make_user("ai_t", role="teacher")
+    student = make_user("ai_s", role="student")
+    nid = client.post("/api/v1/teaching/nodes", json={"title": "AI 测试节点"}, headers=teacher).json()["id"]
+    r = client.post("/api/v1/teaching/ai/ask",
+                    json={"node_id": nid, "question": "什么是塞贝克效应？"}, headers=student)
+    assert r.status_code == 200 and r.json()["ai"] is False
+    r = client.post(f"/api/v1/teaching/nodes/{nid}/ai-feedback", headers=student)
+    assert r.status_code == 200 and r.json()["ai"] is False

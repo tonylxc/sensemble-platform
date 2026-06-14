@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI):
         await init_teaching_models()
     except Exception:
         pass
+    # 教学表新增 ai_chat 日志类型(VARCHAR 存枚举，无需迁移)；此处无额外列变更
     yield
 
 

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import models
+from .. import llm, models
 from ..deps import get_current_user, require_roles
 from ..teaching import (CourseNode, LogKind, Quiz, QuizType, StudentLog,
                         get_session, grade_choice)
@@ -225,3 +225,63 @@ async def list_logs(node_id: Optional[int] = None, student_id: Optional[int] = N
              "is_correct": l.is_correct, "score": l.score,
              "created_at": l.created_at.isoformat() if l.created_at else None}
             for l in logs]
+
+
+# ---------- AI 助教（疑问答疑 + 学习过程反馈） ----------
+class AskIn(BaseModel):
+    question: str
+    node_id: Optional[int] = None
+
+
+_SYS = ("你是“众感”平台面向《电气测试技术》《现代检测技术》《能源物联网技术》等课程的 AI 助教。"
+        "请用简体中文、面向本科生作答：准确、简洁、鼓励式；涉及实验或数据时给出排查思路与学习建议。")
+
+
+@router.post("/ai/ask")
+async def ai_ask(body: AskIn, db: AsyncSession = Depends(get_session),
+                 user: models.User = Depends(get_current_user)):
+    """学生疑问答疑：以当前知识点内容为背景，调用 LLM 回答。"""
+    node = await db.get(CourseNode, body.node_id) if body.node_id else None
+    ctx = f"【当前知识点】{node.title}\n{(node.content or '')[:2000]}\n\n" if node else ""
+    try:
+        ans = await llm.chat([
+            {"role": "system", "content": _SYS},
+            {"role": "user", "content": f"{ctx}学生提问：{body.question}"},
+        ])
+    except Exception:
+        ans = None
+    if not ans:
+        return {"answer": "（AI 助教暂未配置或暂时不可用；教师可在后端 .env 设置 LLM_BASE_URL 后启用。）", "ai": False}
+    if node:   # 记录学习过程（关联知识点时）
+        db.add(StudentLog(user_id=user.id, node_id=node.id, kind=LogKind.ai_chat,
+                          content=body.question, answer={"ai_answer": ans}))
+        await db.commit()
+    return {"answer": ans, "ai": True}
+
+
+@router.post("/nodes/{node_id}/ai-feedback")
+async def ai_feedback(node_id: int, db: AsyncSession = Depends(get_session),
+                      user: models.User = Depends(get_current_user)):
+    """学习过程反馈：汇总该生在此知识点的心得与答题，调用 LLM 给出反馈建议。"""
+    node = await db.get(CourseNode, node_id)
+    if not node:
+        raise HTTPException(404, "知识点不存在")
+    logs = (await db.execute(select(StudentLog).where(
+        StudentLog.user_id == user.id, StudentLog.node_id == node_id))).scalars().all()
+    reflections = [l.content for l in logs if l.kind == LogKind.reflection and l.content]
+    answered = [l for l in logs if l.kind == LogKind.quiz_answer]
+    n_ok = sum(1 for l in answered if l.is_correct)
+    summary = (f"知识点：{node.title}\n"
+               f"学生心得：{' / '.join(reflections) if reflections else '（暂无）'}\n"
+               f"思考题作答：共 {len(answered)} 次，其中正确 {n_ok} 次\n")
+    try:
+        fb = await llm.chat([
+            {"role": "system", "content": _SYS},
+            {"role": "user", "content":
+                "请基于该生在此知识点的学习记录，给出 150 字以内、鼓励式、可操作的学习反馈与下一步建议：\n" + summary},
+        ])
+    except Exception:
+        fb = None
+    if not fb:
+        return {"feedback": "（AI 助教暂未配置或暂时不可用。）", "ai": False}
+    return {"feedback": fb, "ai": True}

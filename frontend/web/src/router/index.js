@@ -9,6 +9,7 @@ import Devices from '../views/Devices.vue'
 import Visualize from '../views/Visualize.vue'
 import Keys from '../views/Keys.vue'
 import Help from '../views/Help.vue'
+import Teaching from '../views/Teaching.vue'
 
 const routes = [
   { path: '/login', component: () => import('../views/Login.vue'), meta: { public: true } },
@@ -25,6 +26,7 @@ const routes = [
       { path: 'datasets', component: () => import('../views/Datasets.vue'), meta: { title: '数据集广场' } },
       { path: 'keys', component: Keys, meta: { title: 'API 密钥' } },
       { path: 'help', component: Help, meta: { title: '使用帮助' } },
+      { path: 'teaching', component: Teaching, meta: { title: '教学中心' } },
       { path: 'review', component: () => import('../views/Review.vue'), meta: { title: '审核队列', roles: ['teacher', 'admin'] } },
       { path: 'stats', component: () => import('../views/Stats.vue'), meta: { title: '统计看板', roles: ['teacher', 'admin'] } }
     ]

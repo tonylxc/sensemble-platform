@@ -54,6 +54,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
         <RouterLink to="/datasets" active-class="active"><span class="ic">🗂️</span>数据集广场</RouterLink>
         <RouterLink to="/keys" active-class="active"><span class="ic">🔑</span>API 密钥</RouterLink>
         <RouterLink to="/help" active-class="active"><span class="ic">📘</span>使用帮助</RouterLink>
+        <RouterLink to="/teaching" active-class="active"><span class="ic">🎓</span>教学中心</RouterLink>
         <RouterLink v-if="isTeacher" to="/review" active-class="active"><span class="ic">✅</span>审核队列</RouterLink>
         <RouterLink v-if="isTeacher" to="/stats" active-class="active"><span class="ic">📊</span>统计看板</RouterLink>
         <a v-if="isTeacher" href="/dashboard" target="_blank" class="bigscreen"><span class="ic">🖥️</span>实验室大屏 ↗</a>

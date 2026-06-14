@@ -52,6 +52,8 @@ services:
       emqx:
         condition: service_started
     ports: ["${BACKEND_BIND:-0.0.0.0}:8000:8000"]   # 反代后建议 .env 设 BACKEND_BIND=127.0.0.1（前端已同源代理 /api，API 无需公网）
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # 后端容器经此访问宿主机 Ollama(11434) 作 AI 助教
     restart: unless-stopped
     # 用镜像默认 CMD（uvicorn，无 --reload）
 

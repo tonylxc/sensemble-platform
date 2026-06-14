@@ -13,3 +13,4 @@ prometheus-fastapi-instrumentator==7.*
 bcrypt==4.0.1  # 钉版：passlib 1.7.4 与 bcrypt>=4.1 不兼容
 minio==7.*
 asyncpg==0.30.*  # 教学模块异步栈（与同步 psycopg2 共库并存）
+httpx==0.27.*    # AI 助教 LLM 调用（异步 OpenAI 兼容）

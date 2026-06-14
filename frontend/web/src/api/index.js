@@ -63,3 +63,19 @@ export const keyApi = {
 export const metaApi = {
   sensorTypes: () => client.get('/api/v1/meta/sensor-types')
 }
+
+// 教学中心：知识点树 / 思考题 / 学生记录 / AI 助教
+export const teachingApi = {
+  nodes: (course_code) => client.get('/api/v1/teaching/nodes', { params: { course_code } }),
+  node: (id) => client.get(`/api/v1/teaching/nodes/${id}`),
+  createNode: (data) => client.post('/api/v1/teaching/nodes', data),
+  updateNode: (id, data) => client.patch(`/api/v1/teaching/nodes/${id}`, data),
+  deleteNode: (id) => client.delete(`/api/v1/teaching/nodes/${id}`),
+  addQuiz: (nodeId, data) => client.post(`/api/v1/teaching/nodes/${nodeId}/quizzes`, data),
+  deleteQuiz: (id) => client.delete(`/api/v1/teaching/quizzes/${id}`),
+  answer: (quizId, answer) => client.post(`/api/v1/teaching/quizzes/${quizId}/answer`, { answer }),
+  reflection: (nodeId, content) => client.post(`/api/v1/teaching/nodes/${nodeId}/reflection`, { content }),
+  logs: (params) => client.get('/api/v1/teaching/logs', { params }),
+  aiAsk: (node_id, question) => client.post('/api/v1/teaching/ai/ask', { node_id, question }),
+  aiFeedback: (nodeId) => client.post(`/api/v1/teaching/nodes/${nodeId}/ai-feedback`)
+}

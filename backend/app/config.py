@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     minio_enabled: bool = True
     minio_secure: bool = False
 
+    # AI 助教（OpenAI 兼容端点；llm_base_url 为空 = 禁用，相关接口优雅降级）
+    llm_base_url: str = ""        # 如 http://host.docker.internal:11434/v1 (本机Ollama) / https://api.deepseek.com/v1
+    llm_api_key: str = ""
+    llm_model: str = "qwen2.5:7b"
+    llm_timeout: float = 60.0
+
     @property
     def database_url(self) -> str:
         return (f"postgresql+psycopg2://{self.db_user}:{self.db_password}"
