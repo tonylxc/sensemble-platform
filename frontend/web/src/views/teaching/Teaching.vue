@@ -60,11 +60,6 @@ async function openNode(id) {
  * 扫描 .rich 和 .qstem 内的 $...$ 和 $$...$$ 公式，调用 KaTeX 渲染
  */
 function renderMathAsync() {
-  // 清除所有旧的渲染标记，确保内容变化时能重新渲染
-  document.querySelectorAll('.katex-rendered').forEach(el => {
-    el.classList.remove('katex-rendered')
-  })
-
   if ('requestIdleCallback' in window) {
     // 优先级：空闲时执行
     requestIdleCallback(() => {
@@ -90,18 +85,17 @@ function renderMath() {
   const richElements = document.querySelectorAll('.rich, .qstem, .aibox')
 
   richElements.forEach((elem) => {
-    // 跳过已渲染的（含 katex-render 类）
-    if (elem.classList.contains('katex-rendered')) return
-
     try {
-      // 获取当前 HTML，但避免破坏已渲染的 KaTeX（通过保护包含 .katex 的节点）
       const html = elem.innerHTML
+
+      // 只有当HTML中包含未渲染的公式（$ 或 $$）时才处理
+      if (!html.includes('$')) return
+
       const processed = processLatexInHTML(html)
 
       if (processed !== html) {
         elem.innerHTML = processed
       }
-      elem.classList.add('katex-rendered')
     } catch (e) {
       console.error('LaTeX 渲染出错:', e)
     }
