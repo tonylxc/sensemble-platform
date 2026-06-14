@@ -9,8 +9,8 @@
   - 支持批量同步、增量更新、错误恢复
 
 用法：
-  python tools/sync_knowledge.py --dir docs/knowledge/ch1 --course EE101 --api http://localhost:8000
-  python tools/sync_knowledge.py --file docs/knowledge/ch1/intro.md --course EE101 --dry-run
+  python tools/sync_knowledge.py --dir docs/knowledge --course EE101 --api http://localhost:8000
+  python tools/sync_knowledge.py --file docs/knowledge/intro.md --course EE101 --dry-run
 
 依赖：pip install httpx pyyaml
 """
@@ -337,7 +337,7 @@ async def main():
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--file', help='单个 Markdown 文件路径')
-    group.add_argument('--dir', help='Markdown 文件目录（非递归）')
+    group.add_argument('--dir', help='Markdown 文件目录（递归扫描所有子目录）')
 
     parser.add_argument('--course', required=True, help='课程代码（如 "EE101"）')
     parser.add_argument('--api', default='http://localhost:8000',
@@ -361,8 +361,8 @@ async def main():
             logger.error(f"目录不存在：{args.dir}")
             sys.exit(1)
 
-        # 非递归，仅当前目录的 .md 文件
-        files = sorted([str(f) for f in dir_path.glob('*.md')])
+        # 递归扫描所有 .md 文件（包括子目录）
+        files = sorted([str(f) for f in dir_path.glob('**/*.md')])
 
         if not files:
             logger.error(f"目录中未找到 .md 文件：{args.dir}")
