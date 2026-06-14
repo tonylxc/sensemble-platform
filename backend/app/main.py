@@ -61,6 +61,13 @@ async def lifespan(app: FastAPI):
         pass
     start_mqtt()
     start_offline_monitor()
+    # 教学模块（独立异步栈：独立 Base/引擎，仅经 user_id/device_id 逻辑关联设备表）
+    # 失败不影响平台启动
+    try:
+        from .teaching import init_teaching_models
+        await init_teaching_models()
+    except Exception:
+        pass
     yield
 
 
@@ -80,6 +87,13 @@ app.include_router(open_data.router, prefix="/api/v1/open", tags=["open-api"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
 app.include_router(stats.router, prefix="/api/v1/stats", tags=["stats"])
 app.include_router(meta.router, prefix="/api/v1/meta", tags=["meta"])
+
+# 教学模块（异步路由；导入/依赖失败时静默跳过，不影响核心平台）
+try:
+    from .routers import teaching as teaching_router
+    app.include_router(teaching_router.router, prefix="/api/v1/teaching", tags=["teaching"])
+except Exception:
+    pass
 
 # Prometheus 指标（FR-15.2）：暴露 /metrics 供 Prometheus 抓取（依赖缺失时静默跳过）
 try:
